@@ -2,7 +2,6 @@ package one.ruri.authmeplus;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -22,10 +21,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public class AuthMePlus extends JavaPlugin implements Listener {
 
-    private Object authMeApiInstance = null;
-    private Method mIsAuthenticated = null;
-    private Method mForceLogin = null;
-
+    private Bridge authMe;
     private File linkedFile;
     private FileConfiguration linkedConfig;
     private FileConfiguration cfg;
@@ -51,9 +47,8 @@ public class AuthMePlus extends JavaPlugin implements Listener {
             this.linkedFile
         );
 
-        try {
-            findAuthMeApi();
-        } catch (Exception e) {
+        this.authMe = new Bridge(getLogger());
+        if (!this.authMe.findAuthMeApi()) {
             getLogger().warning(
                 "AuthMe API not found via reflection. Plugin will still run but cannot force-login players until AuthMe is present."
             );
@@ -82,86 +77,6 @@ public class AuthMePlus extends JavaPlugin implements Listener {
             }
         }
         getLogger().info("AuthMePlus disabled.");
-    }
-
-    private void findAuthMeApi() {
-        try {
-            Class<?> c = Class.forName("fr.xephi.authme.api.v3.AuthMeApi");
-            Method getInstance = c.getMethod("getInstance");
-            Object instance = getInstance.invoke(null);
-            Method isAuth = c.getMethod("isAuthenticated", Player.class);
-            Method force = c.getMethod("forceLogin", Player.class);
-            this.authMeApiInstance = instance;
-            this.mIsAuthenticated = isAuth;
-            this.mForceLogin = force;
-            getLogger().info(
-                "Found AuthMe API: fr.xephi.authme.api.v3.AuthMeApi"
-            );
-            return;
-        } catch (Throwable throwable) {
-            try {
-                Class<?> c = Class.forName("fr.xephi.authme.api.API");
-                Method getInstance = c.getMethod("getInstance");
-                Object instance = getInstance.invoke(null);
-                Method isAuth = c.getMethod("isAuthenticated", Player.class);
-                Method force = c.getMethod("forceLogin", Player.class);
-                this.authMeApiInstance = instance;
-                this.mIsAuthenticated = isAuth;
-                this.mForceLogin = force;
-                getLogger().info("Found AuthMe API: fr.xephi.authme.api.API");
-                return;
-            } catch (Throwable throwable1) {
-                try {
-                    Class<?> main = Class.forName("fr.xephi.authme.AuthMe");
-                    Method getInstance = main.getMethod("getInstance");
-                    Object mainInstance = getInstance.invoke(null);
-                    Method getAPI = main.getMethod("getAPI");
-                    Object apiInstance = getAPI.invoke(mainInstance);
-                    Class<?> apiClass = apiInstance.getClass();
-                    Method isAuth = apiClass.getMethod(
-                        "isAuthenticated",
-                        Player.class
-                    );
-                    Method force = apiClass.getMethod(
-                        "forceLogin",
-                        Player.class
-                    );
-                    this.authMeApiInstance = apiInstance;
-                    this.mIsAuthenticated = isAuth;
-                    this.mForceLogin = force;
-                    getLogger().info(
-                        "Found AuthMe API via fr.xephi.authme.AuthMe.getInstance().getAPI()"
-                    );
-                } catch (Throwable throwable2) {
-                    // AuthMe not found
-                }
-            }
-        }
-    }
-
-    private boolean isAuthenticated(Player p) {
-        if (this.mIsAuthenticated == null) return false;
-        try {
-            Object res = this.mIsAuthenticated.invoke(
-                this.authMeApiInstance,
-                p
-            );
-            if (res instanceof Boolean) return (Boolean) res;
-        } catch (Exception e) {
-            getLogger().warning(
-                "Error invoking isAuthenticated: " + e.getMessage()
-            );
-        }
-        return false;
-    }
-
-    private void forceLogin(Player p) {
-        if (this.mForceLogin == null) return;
-        try {
-            this.mForceLogin.invoke(this.authMeApiInstance, p);
-        } catch (Exception e) {
-            getLogger().warning("Error invoking forceLogin: " + e.getMessage());
-        }
     }
 
     private void saveLinkedConfigAsync() {
@@ -213,8 +128,8 @@ public class AuthMePlus extends JavaPlugin implements Listener {
         }
 
         if (isIpAuthorized) {
-            if (!isAuthenticated(player)) {
-                forceLogin(player);
+            if (!this.authMe.isAuthenticated(player)) {
+                this.authMe.forceLogin(player);
                 player.sendMessage(
                     Utils.getMessage(
                         this.cfg,
@@ -228,7 +143,7 @@ public class AuthMePlus extends JavaPlugin implements Listener {
         }
 
         if (
-            isAuthenticated(player) &&
+            this.authMe.isAuthenticated(player) &&
             this.cfg.getBoolean("settings.prompt_on_join", true)
         ) {
             boolean alreadyPrompted = this.linkedConfig.getBoolean(
@@ -304,7 +219,11 @@ public class AuthMePlus extends JavaPlugin implements Listener {
 
         if (!this.cfg.getBoolean("settings.enableplugin", true)) {
             p.sendMessage(
-                Utils.getMessage(this.cfg, "messages.plugin_disabled", "&cPlugin disabled.")
+                Utils.getMessage(
+                    this.cfg,
+                    "messages.plugin_disabled",
+                    "&cPlugin disabled."
+                )
             );
             return true;
         }
@@ -320,17 +239,39 @@ public class AuthMePlus extends JavaPlugin implements Listener {
 
         if (args.length == 0) {
             p.sendMessage(
-                Utils.getMessage(this.cfg, "messages.help_header", "&6=== Premium Commands ===")
+                Utils.getMessage(
+                    this.cfg,
+                    "messages.help_header",
+                    "&6=== Premium Commands ==="
+                )
             );
             p.sendMessage(
-                Utils.getMessage(this.cfg, "messages.help_accept", "&e/premium accept")
+                Utils.getMessage(
+                    this.cfg,
+                    "messages.help_accept",
+                    "&e/premium accept"
+                )
             );
             p.sendMessage(
-                Utils.getMessage(this.cfg, "messages.help_revoke", "&e/premium revoke")
+                Utils.getMessage(
+                    this.cfg,
+                    "messages.help_revoke",
+                    "&e/premium revoke"
+                )
             );
-            p.sendMessage(Utils.getMessage(this.cfg, "messages.help_list", "&e/premium list"));
             p.sendMessage(
-                Utils.getMessage(this.cfg, "messages.help_about", "&e/premium about")
+                Utils.getMessage(
+                    this.cfg,
+                    "messages.help_list",
+                    "&e/premium list"
+                )
+            );
+            p.sendMessage(
+                Utils.getMessage(
+                    this.cfg,
+                    "messages.help_about",
+                    "&e/premium about"
+                )
             );
             return true;
         }
@@ -347,7 +288,11 @@ public class AuthMePlus extends JavaPlugin implements Listener {
                 return handleAbout(p);
             default:
                 p.sendMessage(
-                    Utils.getMessage(this.cfg, "messages.unknown_command", "&eUnknown command.")
+                    Utils.getMessage(
+                        this.cfg,
+                        "messages.unknown_command",
+                        "&eUnknown command."
+                    )
                 );
                 return true;
         }
@@ -392,7 +337,7 @@ public class AuthMePlus extends JavaPlugin implements Listener {
         InetAddress pAddress,
         String currentIp
     ) {
-        if (!isAuthenticated(p)) {
+        if (!this.authMe.isAuthenticated(p)) {
             p.sendMessage(
                 Utils.getMessage(
                     this.cfg,
@@ -439,7 +384,11 @@ public class AuthMePlus extends JavaPlugin implements Listener {
         }
 
         p.sendMessage(
-            Utils.getMessage(this.cfg, "messages.mojang_check", "&eChecking your account...")
+            Utils.getMessage(
+                this.cfg,
+                "messages.mojang_check",
+                "&eChecking your account..."
+            )
         );
 
         Bukkit.getAsyncScheduler().runNow(this, task -> {
@@ -519,7 +468,11 @@ public class AuthMePlus extends JavaPlugin implements Listener {
         if (args.length == 1) {
             if (currentIp == null) {
                 p.sendMessage(
-                    Utils.getMessage(this.cfg, "messages.no_ip", "&cUnable to retrieve the IP.")
+                    Utils.getMessage(
+                        this.cfg,
+                        "messages.no_ip",
+                        "&cUnable to retrieve the IP."
+                    )
                 );
                 return true;
             }
@@ -620,7 +573,11 @@ public class AuthMePlus extends JavaPlugin implements Listener {
                 )
             );
             p.sendMessage(
-                Utils.getMessage(this.cfg, "messages.list_howto", "&eUse /premium list sure")
+                Utils.getMessage(
+                    this.cfg,
+                    "messages.list_howto",
+                    "&eUse /premium list sure"
+                )
             );
             return true;
         }
@@ -631,11 +588,19 @@ public class AuthMePlus extends JavaPlugin implements Listener {
             );
             if (linkedIps == null || linkedIps.isEmpty()) {
                 p.sendMessage(
-                    Utils.getMessage(this.cfg, "messages.list_empty", "&eNo allowed IPs.")
+                    Utils.getMessage(
+                        this.cfg,
+                        "messages.list_empty",
+                        "&eNo allowed IPs."
+                    )
                 );
             } else {
                 p.sendMessage(
-                    Utils.getMessage(this.cfg, "messages.list_header", "&aLinked IPs:")
+                    Utils.getMessage(
+                        this.cfg,
+                        "messages.list_header",
+                        "&aLinked IPs:"
+                    )
                 );
                 for (String linkedIp : linkedIps) {
                     String format = Utils.getMessage(
@@ -648,7 +613,11 @@ public class AuthMePlus extends JavaPlugin implements Listener {
             }
         } else {
             p.sendMessage(
-                Utils.getMessage(this.cfg, "messages.unknown_command", "&eUnknown command.")
+                Utils.getMessage(
+                    this.cfg,
+                    "messages.unknown_command",
+                    "&eUnknown command."
+                )
             );
         }
         return true;
@@ -668,5 +637,4 @@ public class AuthMePlus extends JavaPlugin implements Listener {
         }
         return true;
     }
-
 }
