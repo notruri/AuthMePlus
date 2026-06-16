@@ -55,7 +55,7 @@ tasks.jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest {
         attributes(
-            "Main-Class" to "one.ruri.authmeplus.AuthMePlus",
+            "Main-Class" to "one.ruri.authmeplus.Main",
             "Implementation-Title" to project.name,
             "Implementation-Version" to project.version
         )

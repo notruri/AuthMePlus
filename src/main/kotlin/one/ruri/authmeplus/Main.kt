@@ -2,7 +2,7 @@ package one.ruri.authmeplus
 
 import org.bukkit.plugin.java.JavaPlugin
 
-class AuthMePlus : JavaPlugin() {
+class Main : JavaPlugin() {
     private var handlers: Handlers? = null
 
     override fun onEnable() {
