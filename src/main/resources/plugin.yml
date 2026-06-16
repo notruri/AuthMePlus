@@ -1,4 +1,4 @@
-name: AuthMe+
+name: AuthMePlus
 version: 1.0
 main: one.ruri.authmeplus.AuthMePlus
 api-version: 26.1

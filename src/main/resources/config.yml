@@ -1,6 +1,7 @@
 settings:
   enableplugin: true
   prompt_on_join: true
+  allow_local_ips: false
 
 messages:
   # General errors
@@ -38,14 +39,8 @@ messages:
 
   # /premium about (GDPR)
   about:
-    - "&6=== About & GDPR ==="
     - "&eThis plugin allows automatic login without a password if"
     - "&eyou play with an official Minecraft account (Premium)."
-    - "&a&nYour data protection:&r"
-    - "&f- Your IP address is only stored with your explicit consent."
-     - "&f- IPs are stored in plain text in the linked file."
-     - "&f- Administrators with file access can read them."
-    - "&f- You can delete your data at any time with &c/premium revoke all&f."
 
   # Login events
   auto_login_success: "&aAutomatic login successful - premium account and IP verified!"
