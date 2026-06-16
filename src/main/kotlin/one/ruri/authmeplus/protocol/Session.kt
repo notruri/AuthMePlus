@@ -68,7 +68,7 @@ internal class Session(
     }
 
     fun register() {
-        log.info("Registering ProtocolLib async packet listeners...")
+        log.info("Registering listeners...")
 
         registerLoginListener(PacketType.Login.Client.START) { event ->
             handleLoginStart(event)
@@ -78,7 +78,7 @@ internal class Session(
             handleEncryptionResponse(event)
         }
 
-        log.info("ProtocolLib async listeners registered")
+        log.info("Listeners registered")
     }
 
     fun unregister() {
@@ -86,7 +86,7 @@ internal class Session(
         verifiedIps.clear()
         verifiedSkins.clear()
         pendingSessions.clear()
-        log.info("ProtocolLib listeners unregistered")
+        log.info("Listeners unregistered")
     }
 
     private fun registerLoginListener(
@@ -117,7 +117,7 @@ internal class Session(
 
     private fun handleLoginStart(event: PacketEvent) {
         val username = event.packet.strings.read(0)
-        val player = event.getPlayer()
+        val player = event.player
         val address = player?.address
 
         if (player == null || address == null) {
@@ -150,7 +150,7 @@ internal class Session(
     }
 
     private fun handleEncryptionResponse(event: PacketEvent) {
-        val player = event.getPlayer()
+        val player = event.player
         val address = player?.address
 
         if (address == null) {
