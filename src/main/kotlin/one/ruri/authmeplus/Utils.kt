@@ -9,7 +9,6 @@ import java.net.HttpURLConnection
 import java.net.InetAddress
 import java.net.URI
 import java.nio.charset.StandardCharsets
-import java.util.logging.Logger
 
 enum class AccountType {
     PREMIUM,
@@ -29,7 +28,7 @@ object Utils {
     fun color(text: String): Component = LEGACY.deserialize(text)
 
     fun checkAccount(
-        logger: Logger,
+        log: Logger,
         username: String,
     ): AccountType {
         var con: HttpURLConnection? = null
@@ -51,7 +50,7 @@ object Utils {
             }
             return AccountType.OFFLINE
         } catch (e: Exception) {
-            logger.warning("Error checking Mojang API for $username: ${e.message}")
+            log.warning("Error checking Mojang API for $username: ${e.message}")
             return AccountType.UNKNOWN
         } finally {
             con?.disconnect()

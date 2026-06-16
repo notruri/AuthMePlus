@@ -7,6 +7,7 @@ import com.comphenix.protocol.events.PacketAdapter
 import com.comphenix.protocol.events.PacketEvent
 import com.google.gson.JsonParser
 import one.ruri.authmeplus.AccountType
+import one.ruri.authmeplus.Logger
 import one.ruri.authmeplus.Utils
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
@@ -32,6 +33,7 @@ data class SkinData(
 
 internal class Session(
     private val plugin: JavaPlugin,
+    private val log: Logger,
 ) {
     private val protocolManager = ProtocolLibrary.getProtocolManager()
     private val verifiedIps = ConcurrentHashMap.newKeySet<String>()
@@ -44,7 +46,7 @@ internal class Session(
             .build()
     private val secureRandom = SecureRandom()
     private val keyPair: KeyPair
-    private val support = Handshake(plugin, protocolManager)
+    private val support = Handshake(plugin, protocolManager, log)
 
     data class PendingSession(
         val username: String,
@@ -53,9 +55,9 @@ internal class Session(
     )
 
     init {
-        plugin.logger.info("Generating RSA key pair for encryption handshake...")
+        log.info("Generating RSA key pair for encryption handshake...")
         keyPair = generateKeyPair()
-        plugin.logger.info("RSA key pair generated (1024-bit)")
+        log.info("RSA key pair generated (1024-bit)")
     }
 
     fun isVerified(address: InetSocketAddress?): Boolean = address?.address?.hostAddress in verifiedIps
@@ -66,7 +68,7 @@ internal class Session(
     }
 
     fun register() {
-        plugin.logger.info("Registering ProtocolLib async packet listeners...")
+        log.info("Registering ProtocolLib async packet listeners...")
 
         registerLoginListener(PacketType.Login.Client.START) { event ->
             handleLoginStart(event)
@@ -76,7 +78,7 @@ internal class Session(
             handleEncryptionResponse(event)
         }
 
-        plugin.logger.info("ProtocolLib async listeners registered")
+        log.info("ProtocolLib async listeners registered")
     }
 
     fun unregister() {
@@ -84,7 +86,7 @@ internal class Session(
         verifiedIps.clear()
         verifiedSkins.clear()
         pendingSessions.clear()
-        plugin.logger.info("ProtocolLib listeners unregistered")
+        log.info("ProtocolLib listeners unregistered")
     }
 
     private fun registerLoginListener(
@@ -119,29 +121,29 @@ internal class Session(
         val address = player?.address
 
         if (player == null || address == null) {
-            plugin.logger.warning("No player or address for $username - can't intercept")
+            log.warning("No player or address for $username - can't intercept")
             return
         }
 
-        plugin.logger.info("Login start for $username (${address.address?.hostAddress ?: "unknown"})")
+        log.debug("Login start for $username (${address.address?.hostAddress ?: "unknown"})")
 
-        val status = Utils.checkAccount(plugin.logger, username)
-        plugin.logger.info("Mojang API name check for $username: $status")
+        val status = Utils.checkAccount(log, username)
+        log.debug("Mojang API name check for $username: $status")
 
         if (status != AccountType.PREMIUM) {
-            plugin.logger.fine("$username not premium ($status) - letting pass through")
+            log.debug("$username not premium ($status) - letting pass through")
             return
         }
 
         val verifyToken = ByteArray(4).also(secureRandom::nextBytes)
-        plugin.logger.info("$username is premium - canceling START, initiating encryption")
+        log.debug("$username is premium - canceling START, initiating encryption")
         event.isCancelled = true
         pendingSessions[address] = PendingSession(username, verifyToken, player)
 
         try {
             support.sendEncryptionBegin(player, keyPair, verifyToken)
         } catch (e: Exception) {
-            plugin.logger.warning("Failed to send encryption begin to $username (${e.message}) - uncancelling START")
+            log.warning("Failed to send encryption begin to $username (${e.message}) - uncancelling START")
             pendingSessions.remove(address)
             event.isCancelled = false
         }
@@ -152,28 +154,28 @@ internal class Session(
         val address = player?.address
 
         if (address == null) {
-            plugin.logger.warning("Encryption response from unknown address - ignoring")
+            log.warning("Encryption response from unknown address - ignoring")
             return
         }
 
         val session = pendingSessions[address]
         if (session == null) {
-            plugin.logger.warning("Encryption response from ${address.address?.hostAddress ?: "unknown"} but no pending session")
+            log.warning("Encryption response from ${address.address?.hostAddress ?: "unknown"} but no pending session")
             return
         }
 
-        plugin.logger.info("Encryption response received for ${session.username}")
+        log.debug("Encryption response received for ${session.username}")
         event.isCancelled = true
 
         val sessionPlayer = session.playerRef
         if (sessionPlayer == null) {
-            plugin.logger.warning("No player ref in session for ${session.username}")
+            log.warning("No player ref in session for ${session.username}")
             pendingSessions.remove(address)
             return
         }
 
         if (!sessionPlayer.isOnline) {
-            plugin.logger.warning("Player ${session.username} went offline during handshake")
+            log.warning("Player ${session.username} went offline during handshake")
             pendingSessions.remove(address)
             return
         }
@@ -183,19 +185,19 @@ internal class Session(
 
         Bukkit.getGlobalRegionScheduler().run(plugin) {
             try {
-                plugin.logger.fine("Enabling encryption on connection for ${session.username}...")
+                log.debug("Enabling encryption on connection for ${session.username}...")
                 if (!support.enableEncryption(sharedSecret, sessionPlayer)) {
-                    plugin.logger.warning("Failed to enable encryption for ${session.username}")
+                    log.warning("Failed to enable encryption for ${session.username}")
                     support.disconnectClient(sessionPlayer, "Encryption setup failed")
                     return@run
                 }
 
-                plugin.logger.fine("Encryption enabled for ${session.username}")
+                log.debug("Encryption enabled for ${session.username}")
                 support.injectFakeStart(sessionPlayer, realUuid, session.username)
                 address.address?.hostAddress?.let(verifiedIps::add)
-                plugin.logger.info("Premium session fully verified: ${session.username} ($realUuid)")
+                log.info("Premium session fully verified: ${session.username} ($realUuid)")
             } catch (e: Exception) {
-                plugin.logger.warning("Failed to finalize premium login: ${e.message}")
+                log.warning("Failed to finalize premium login: ${e.message}")
                 support.disconnectClient(sessionPlayer, "Login finalization failed")
             } finally {
                 pendingSessions.remove(address)
@@ -217,7 +219,7 @@ internal class Session(
             try {
                 SecretKeySpec(cipher.doFinal(sharedSecretEncrypted), "AES")
             } catch (e: Exception) {
-                plugin.logger.warning("RSA decrypt failed for ${session.username}: ${e.message}")
+                log.warning("RSA decrypt failed for ${session.username}: ${e.message}")
                 support.disconnectClient(player, "Decryption error")
                 pendingSessions.remove(address)
                 return null
@@ -228,20 +230,20 @@ internal class Session(
             try {
                 cipher.doFinal(verifyTokenEncrypted)
             } catch (e: Exception) {
-                plugin.logger.warning("RSA decrypt verify token failed: ${e.message}")
+                log.warning("RSA decrypt verify token failed: ${e.message}")
                 support.disconnectClient(player, "Decryption error")
                 pendingSessions.remove(address)
                 return null
             }
 
         if (!session.verifyToken.contentEquals(receivedToken)) {
-            plugin.logger.warning("Verify token mismatch for ${session.username}")
+            log.warning("Verify token mismatch for ${session.username}")
             support.disconnectClient(player, "Invalid verify token")
             pendingSessions.remove(address)
             return null
         }
 
-        plugin.logger.fine("Shared secret decrypted for ${session.username}")
+        log.debug("Shared secret decrypted for ${session.username}")
         return sharedSecret
     }
 
@@ -251,7 +253,7 @@ internal class Session(
         address: InetSocketAddress,
         player: Player,
     ): UUID? {
-        plugin.logger.info("Verify token matched for ${session.username} - calling hasJoined")
+        log.debug("Verify token matched for ${session.username} - calling hasJoined")
 
         val serverHash = support.computeServerHash("", sharedSecret, keyPair.public)
         val request =
@@ -267,20 +269,20 @@ internal class Session(
 
         val response =
             try {
-                plugin.logger.info("Querying Mojang session server for ${session.username}...")
+                log.debug("Querying Mojang session server for ${session.username}...")
                 httpClient.send(request, HttpResponse.BodyHandlers.ofString())
             } catch (e: Exception) {
-                plugin.logger.warning("Session verification request failed for ${session.username}: ${e.message}")
+                log.warning("Session verification request failed for ${session.username}: ${e.message}")
                 support.disconnectClient(player, "Invalid session")
                 pendingSessions.remove(address)
                 return null
             }
 
         val httpCode = response.statusCode()
-        plugin.logger.info("hasJoined response for ${session.username}: HTTP $httpCode")
+        log.debug("hasJoined response for ${session.username}: HTTP $httpCode")
 
         if (httpCode != 200 || response.body().isBlank()) {
-            plugin.logger.warning("Session verification FAILED for ${session.username} (HTTP $httpCode)")
+            log.warning("Session verification FAILED for ${session.username} (HTTP $httpCode)")
             support.disconnectClient(player, "Invalid session")
             pendingSessions.remove(address)
             return null
@@ -288,46 +290,46 @@ internal class Session(
 
         val uuidStr = support.extractUuidFromJson(response.body())
         if (uuidStr == null) {
-            plugin.logger.warning("Could not parse hasJoined response for ${session.username}: ${response.body()}")
+            log.warning("Could not parse hasJoined response for ${session.username}: ${response.body()}")
             support.disconnectClient(player, "Invalid session data")
             pendingSessions.remove(address)
             return null
         }
 
         val realUuid = UUID.fromString(uuidStr)
-        plugin.logger.info("Session VERIFIED for ${session.username} - Mojang UUID: $realUuid")
+        log.info("Session VERIFIED for ${session.username} - Mojang UUID: $realUuid")
 
         val body = response.body()
         try {
             val root = JsonParser.parseString(body).asJsonObject
             val properties = root.getAsJsonArray("properties")
             if (properties == null) {
-                plugin.logger.warning("hasJoined response for ${session.username} has no properties array (no skin data available)")
+                log.warning("hasJoined response for ${session.username} has no properties array (no skin data available)")
             } else {
-                plugin.logger.info("hasJoined response for ${session.username} has ${properties.size()} properties")
+                log.debug("hasJoined response for ${session.username} has ${properties.size()} properties")
                 for (element in properties) {
                     val prop = element.asJsonObject
                     val propName = prop.get("name").asString
-                    plugin.logger.info("Skin property found: $propName")
+                    log.debug("Skin property found: $propName")
                     if (propName == "textures") {
                         val value = prop.get("value").asString
                         val signature = prop.get("signature").asString
                         val ip = address.address?.hostAddress
-                        plugin.logger.info(
+                        log.debug(
                             "Textures property extracted for ${session.username}: value.length=${value.length}, signature.length=${signature.length}, ip=$ip",
                         )
                         if (ip != null) {
                             verifiedSkins[ip] = SkinData(value, signature)
-                            plugin.logger.info("Skin data stored for ${session.username} under ip=$ip, map size=${verifiedSkins.size}")
+                            log.debug("Skin data stored for ${session.username} under ip=$ip, map size=${verifiedSkins.size}")
                         } else {
-                            plugin.logger.warning("Could not store skin data for ${session.username}: ip is null")
+                            log.warning("Could not store skin data for ${session.username}: ip is null")
                         }
                         break
                     }
                 }
             }
         } catch (e: Exception) {
-            plugin.logger.warning("Failed to parse skin data from hasJoined response: ${e.message}")
+            log.warning("Failed to parse skin data from hasJoined response: ${e.message}")
         }
 
         return realUuid

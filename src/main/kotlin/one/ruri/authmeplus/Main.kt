@@ -6,19 +6,23 @@ import org.bukkit.plugin.java.JavaPlugin
 class Main : JavaPlugin() {
     private var eventHandlers: EventHandlers? = null
     private var protocolHandler: Protocol? = null
+    private lateinit var log: Logger
 
     override fun onEnable() {
         saveDefaultConfig()
         reloadConfig()
 
-        protocolHandler = Protocol(this).also { it.register() }
-        logger.info("ProtocolLib v${Protocol.protocolLibVersion()} - real session verification enabled")
+        log = Logger(logger)
+        log.debug = config.getBoolean("settings.debug", false)
 
-        eventHandlers = EventHandlers(this, config, protocolHandler!!)
+        protocolHandler = Protocol(this, log).also { it.register() }
+        log.info("ProtocolLib v${Protocol.protocolLibVersion()} - real session verification enabled")
+
+        eventHandlers = EventHandlers(this, config, protocolHandler!!, log)
         eventHandlers!!.register()
 
         val cfg = config
-        logger.info(
+        log.info(
             "AuthMePlus enabled (accept_cracked=${cfg.getBoolean(
                 "settings.accept_cracked",
                 false,
@@ -29,6 +33,6 @@ class Main : JavaPlugin() {
     override fun onDisable() {
         protocolHandler?.unregister()
         eventHandlers?.shutdown()
-        logger.info("AuthMePlus disabled")
+        if (::log.isInitialized) log.info("AuthMePlus disabled")
     }
 }

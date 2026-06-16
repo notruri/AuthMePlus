@@ -20,6 +20,7 @@ class EventHandlers(
     private val plugin: JavaPlugin,
     private var cfg: FileConfiguration,
     private val protocolLib: Protocol,
+    private val log: Logger,
 ) : Listener,
     CommandExecutor,
     TabCompleter {
@@ -41,23 +42,23 @@ class EventHandlers(
         val name = player.name
         val ip = player.address?.address?.hostAddress ?: "unknown"
 
-        plugin.logger.fine("Join event received: $name ($ip)")
+        log.debug("Join event received: $name ($ip)")
 
         if (!cfg.getBoolean("settings.enableplugin", true)) {
-            plugin.logger.fine("Plugin disabled via config - skipping auth handling for $name")
+            log.debug("Plugin disabled via config - skipping auth handling for $name")
             return
         }
 
         if (api.isAuthenticated(player)) {
-            plugin.logger.fine("$name already authenticated via AuthMe - skipping")
+            log.debug("$name already authenticated via AuthMe - skipping")
             return
         }
 
         if (protocolLib.isVerified(player.address)) {
-            plugin.logger.info("ProtocolLib session check PASSED for $name - auto-logging in")
+            log.info("ProtocolLib session check PASSED for $name - auto-logging in")
             player.scheduler.run(plugin, { _ ->
                 if (!player.isOnline) {
-                    plugin.logger.warning("$name went offline before ProtocolLib auto-login could complete")
+                    log.warning("$name went offline before ProtocolLib auto-login could complete")
                     return@run
                 }
 
@@ -68,7 +69,7 @@ class EventHandlers(
                             .toString()
                             .replace("-", "")
                     api.registerPlayer(name, randomPass)
-                    plugin.logger.info("Auto-registered ProtocolLib-verified player: $name")
+                    log.info("Auto-registered ProtocolLib-verified player: $name")
                 }
 
                 if (!api.isAuthenticated(player)) {
@@ -80,19 +81,21 @@ class EventHandlers(
                             "&aYour premium account has been verified!",
                         ),
                     )
-                    plugin.logger.info("Auto-logged ProtocolLib-verified player: $name")
+                    log.info("Auto-logged ProtocolLib-verified player: $name")
                 } else {
-                    plugin.logger.fine("$name already authenticated (ProtocolLib path) - no action needed")
+                    log.debug("$name already authenticated (ProtocolLib path) - no action needed")
                 }
 
                 if (cfg.getBoolean("settings.restore_skins", true)) {
                     val playerIp = player.address?.address?.hostAddress
-                    plugin.logger.info(
-                        "Skin restoration check for $name: ip=$playerIp, protocolLib.isVerified=${protocolLib.isVerified(player.address)}",
+                    log.debug(
+                        "Skin restoration check for $name: ip=$playerIp, protocolLib.isVerified=${protocolLib.isVerified(
+                            player.address,
+                        )}",
                     )
                     val skinData = protocolLib.getSkinData(player.address)
                     if (skinData != null) {
-                        plugin.logger.info(
+                        log.debug(
                             "Skin data found for $name: value.length=${skinData.value.length}, signature.length=${skinData.signature.length}",
                         )
                         try {
@@ -100,25 +103,25 @@ class EventHandlers(
                             val beforeProps = profile.properties.size
                             profile.setProperty(ProfileProperty("textures", skinData.value, skinData.signature))
                             player.playerProfile = profile
-                            plugin.logger.info(
+                            log.info(
                                 "Profile set for $name: had $beforeProps properties before, textures property added, playerProfile updated",
                             )
                         } catch (e: Exception) {
-                            plugin.logger.warning("Failed to apply skin to profile for $name: ${e.message}")
+                            log.warning("Failed to apply skin to profile for $name: ${e.message}")
                         }
                     } else {
-                        plugin.logger.warning(
+                        log.warning(
                             "No skin data found for $name (ip=$playerIp) — verifiedSkins may not have been populated during handshake",
                         )
                     }
                 } else {
-                    plugin.logger.fine("Skin restoration disabled by config for $name")
+                    log.debug("Skin restoration disabled by config for $name")
                 }
             }, null)
             return
         }
 
-        plugin.logger.fine("ProtocolLib session not verified for $name - using normal AuthMe handling")
+        log.debug("ProtocolLib session not verified for $name - using normal AuthMe handling")
     }
 
     override fun onCommand(
@@ -185,12 +188,13 @@ class EventHandlers(
         return try {
             plugin.reloadConfig()
             cfg = plugin.config
+            log.debug = cfg.getBoolean("settings.debug", false)
             sender.sendMessage(Utils.getMessage(cfg, "messages.reload_success", "&aConfiguration reloaded."))
-            plugin.logger.info("Configuration reloaded by ${sender.name}")
+            log.info("Configuration reloaded by ${sender.name}")
             true
         } catch (e: Exception) {
             sender.sendMessage(Utils.getMessage(cfg, "messages.reload_fail", "&cFailed to reload config."))
-            plugin.logger.warning("Failed to reload config: ${e.message}")
+            log.warning("Failed to reload config: ${e.message}")
             true
         }
     }

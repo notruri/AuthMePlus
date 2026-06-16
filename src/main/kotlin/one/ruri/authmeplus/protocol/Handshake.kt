@@ -7,6 +7,7 @@ import com.comphenix.protocol.injector.netty.channel.NettyChannelInjector
 import com.comphenix.protocol.injector.temporary.TemporaryPlayerFactory
 import com.comphenix.protocol.reflect.accessors.Accessors
 import com.comphenix.protocol.wrappers.WrappedChatComponent
+import one.ruri.authmeplus.Logger
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import java.math.BigInteger
@@ -18,6 +19,7 @@ import javax.crypto.SecretKey
 internal class Handshake(
     private val plugin: JavaPlugin,
     private val protocolManager: ProtocolManager,
+    private val log: Logger,
 ) {
     private companion object {
         const val ENCRYPTION_CLASS_NAME = "net.minecraft.util.Crypt"
@@ -55,9 +57,9 @@ internal class Handshake(
             }
 
             protocolManager.sendServerPacket(player, packet)
-            plugin.logger.fine("Sent ENCRYPTION_BEGIN to ${player.name}")
+            log.debug("Sent ENCRYPTION_BEGIN to ${player.name}")
         } catch (e: Exception) {
-            plugin.logger.warning("Failed to send encryption begin: ${e::class.simpleName}: ${e.message}")
+            log.warning("Failed to send encryption begin: ${e::class.simpleName}: ${e.message}")
             throw e
         }
     }
@@ -71,7 +73,7 @@ internal class Handshake(
         packet.strings.write(0, username)
         packet.getUUIDs().write(0, uuid)
         protocolManager.receiveClientPacket(player, packet, false)
-        plugin.logger.fine("Injected fake START for $username with UUID $uuid")
+        log.debug("Injected fake START for $username with UUID $uuid")
     }
 
     fun disconnectClient(
@@ -84,9 +86,9 @@ internal class Handshake(
             val packet = PacketContainer(PacketType.Login.Server.DISCONNECT)
             packet.chatComponents.write(0, WrappedChatComponent.fromText(reason))
             protocolManager.sendServerPacket(player, packet)
-            plugin.logger.info("Disconnected: $reason")
+            log.info("Disconnected: $reason")
         } catch (e: Exception) {
-            plugin.logger.warning("Failed to disconnect: ${e::class.simpleName}: ${e.message}")
+            log.warning("Failed to disconnect: ${e::class.simpleName}: ${e.message}")
         }
     }
 
@@ -104,17 +106,17 @@ internal class Handshake(
                     )?.invoke(null, player)
 
             if (injector == null) {
-                plugin.logger.warning("Could not get injector for ${player.name}")
+                log.warning("Could not get injector for ${player.name}")
                 return false
             }
 
             val networkManager = resolveNetworkManager(injector)
             if (networkManager == null) {
-                plugin.logger.warning("Could not get NetworkManager from injector")
+                log.warning("Could not get NetworkManager from injector")
                 return false
             }
 
-            plugin.logger.fine("Got NetworkManager: ${networkManager::class.java.name}")
+            log.debug("Got NetworkManager: ${networkManager::class.java.name}")
 
             if (trySecretKeyMethods(networkManager, secretKey)) {
                 return true
@@ -124,12 +126,12 @@ internal class Handshake(
                 return true
             }
 
-            plugin.logger.warning(
+            log.warning(
                 "No encryption method found on ${networkManager::class.java.name} (tried SecretKey and Cipher,Cipher variants)",
             )
             false
         } catch (e: Exception) {
-            plugin.logger.warning("Failed to enable encryption: ${e::class.simpleName}: ${e.message}")
+            log.warning("Failed to enable encryption: ${e::class.simpleName}: ${e.message}")
             false
         }
     }
@@ -180,7 +182,7 @@ internal class Handshake(
         try {
             val method = networkManager::class.java.getMethod(ENCRYPTION_METHOD_NAME, SecretKey::class.java)
             method.invoke(networkManager, secretKey)
-            plugin.logger.fine("Encryption enabled via $ENCRYPTION_METHOD_NAME(SecretKey)")
+            log.debug("Encryption enabled via $ENCRYPTION_METHOD_NAME(SecretKey)")
             true
         } catch (_: NoSuchMethodException) {
             false
@@ -194,7 +196,7 @@ internal class Handshake(
             try {
                 encryptDecrypt(secretKey)
             } catch (_: ClassNotFoundException) {
-                plugin.logger.warning("Cannot find Crypt class - Cipher approach unavailable")
+                log.warning("Cannot find Crypt class - Cipher approach unavailable")
                 return false
             }
 
@@ -206,7 +208,7 @@ internal class Handshake(
                     ciphers.second::class.java,
                 )
             method.invoke(networkManager, ciphers.first, ciphers.second)
-            plugin.logger.fine("Encryption enabled via $ENCRYPTION_METHOD_NAME(Cipher, Cipher)")
+            log.debug("Encryption enabled via $ENCRYPTION_METHOD_NAME(Cipher, Cipher)")
             true
         } catch (_: NoSuchMethodException) {
             false
