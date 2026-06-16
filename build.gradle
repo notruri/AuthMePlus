@@ -2,8 +2,8 @@ plugins {
     id 'java'
 }
 
-group = 'com.example'
-version = '1.2.0'
+group = 'one.ruri'
+version = '1.0.0'
 
 java {
     toolchain {
@@ -45,7 +45,7 @@ jar {
     // JAR metadata
     manifest {
         attributes(
-            'Main-Class': 'com.example.Main', // Put your main class name here
+            'Main-Class': 'one.ruri.authmeplus.AuthMePlus', // Put your main class name here
             'Implementation-Title': project.name,
             'Implementation-Version': project.version
         )
