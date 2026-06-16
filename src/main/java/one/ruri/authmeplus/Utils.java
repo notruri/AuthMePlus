@@ -48,8 +48,8 @@ public final class Utils {
             String url =
                 "https://api.mojang.com/users/profiles/minecraft/" + username;
             con = (HttpURLConnection) (new URL(url)).openConnection();
-            con.setConnectTimeout(3000);
-            con.setReadTimeout(3000);
+            con.setConnectTimeout(10000);
+            con.setReadTimeout(10000);
             con.setRequestMethod("GET");
             con.setRequestProperty("User-Agent", "AuthMePlus/1.0");
             int code = con.getResponseCode();
