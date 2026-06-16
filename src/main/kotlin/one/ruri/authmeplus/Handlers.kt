@@ -1,7 +1,8 @@
 package one.ruri.authmeplus
 
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
-import org.bukkit.ChatColor
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
@@ -76,7 +77,7 @@ class Handlers(
                     if (!cfg.getBoolean("settings.accept_cracked", false)) {
                         player.scheduler.run(plugin, { scheduledTask ->
                             if (player.isOnline) {
-                                player.kickPlayer(
+                                player.kick(
                                     Utils.getMessage(cfg, "messages.kick_not_premium", "&cNot a premium account."),
                                 )
                             }
@@ -99,7 +100,7 @@ class Handlers(
     ): Boolean {
         if (args.isEmpty()) {
             cfg.getStringList("messages.help").forEach { line ->
-                sender.sendMessage(ChatColor.translateAlternateColorCodes('&', line))
+                sender.sendMessage(Utils.color(line))
             }
             return true
         }
@@ -124,7 +125,7 @@ class Handlers(
 
             else -> {
                 cfg.getStringList("messages.help").forEach { line ->
-                    sender.sendMessage(ChatColor.translateAlternateColorCodes('&', line))
+                    sender.sendMessage(Utils.color(line))
                 }
                 true
             }
@@ -149,7 +150,7 @@ class Handlers(
 
     private fun handleReload(sender: CommandSender): Boolean {
         if (!sender.hasPermission("amp.reload") && !sender.isOp) {
-            sender.sendMessage("${ChatColor.RED}You do not have permission to use this command.")
+            sender.sendMessage(Component.text("You do not have permission to use this command.", NamedTextColor.RED))
             return true
         }
         return try {
@@ -166,14 +167,14 @@ class Handlers(
     }
 
     private fun handleVersion(sender: CommandSender): Boolean {
-        val version = plugin.description.version
+        val version = plugin.pluginMeta.version
         val lines = cfg.getStringList("messages.version")
         if (lines.isEmpty()) {
-            sender.sendMessage("${ChatColor.GOLD}AuthMePlus v$version")
+            sender.sendMessage(Component.text("AuthMePlus v$version", NamedTextColor.GOLD))
             return true
         }
         for (line in lines) {
-            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', line.replace("%version%", version)))
+            sender.sendMessage(Utils.color(line.replace("%version%", version)))
         }
         return true
     }
@@ -181,11 +182,11 @@ class Handlers(
     private fun handleAbout(sender: CommandSender): Boolean {
         val lines = cfg.getStringList("messages.about")
         if (lines.isEmpty()) {
-            sender.sendMessage("${ChatColor.RED}No plugin information has been configured.")
+            sender.sendMessage(Component.text("No plugin information has been configured.", NamedTextColor.RED))
             return true
         }
         for (line in lines) {
-            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', line))
+            sender.sendMessage(Utils.color(line))
         }
         return true
     }

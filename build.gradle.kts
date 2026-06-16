@@ -36,6 +36,12 @@ dependencies {
     implementation(kotlin("stdlib"))
 }
 
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+    compilerOptions {
+        allWarningsAsErrors.set(true)
+    }
+}
+
 tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
 }

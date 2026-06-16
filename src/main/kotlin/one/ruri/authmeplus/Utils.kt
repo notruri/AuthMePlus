@@ -1,21 +1,26 @@
 package one.ruri.authmeplus
 
-import org.bukkit.ChatColor
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.configuration.file.FileConfiguration
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.InetAddress
-import java.net.URL
+import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.util.logging.Logger
 
 object Utils {
+    private val LEGACY = LegacyComponentSerializer.legacyAmpersand()
+
     fun getMessage(
         cfg: FileConfiguration,
         path: String,
         def: String,
-    ): String = ChatColor.translateAlternateColorCodes('&', cfg.getString(path, def)!!)
+    ): Component = LEGACY.deserialize(cfg.getString(path, def)!!)
+
+    fun color(text: String): Component = LEGACY.deserialize(text)
 
     fun isIpSafe(
         address: InetAddress?,
@@ -34,7 +39,7 @@ object Utils {
         var con: HttpURLConnection? = null
         try {
             val url = "https://api.mojang.com/users/profiles/minecraft/$username"
-            con = URL(url).openConnection() as HttpURLConnection
+            con = URI(url).toURL().openConnection() as HttpURLConnection
             con.connectTimeout = 10000
             con.readTimeout = 10000
             con.requestMethod = "GET"
