@@ -1,14 +1,9 @@
 package one.ruri.authmeplus;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.lang.reflect.Method;
-import java.net.HttpURLConnection;
 import java.net.InetAddress;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -169,35 +164,6 @@ public class AuthMePlus extends JavaPlugin implements Listener {
         }
     }
 
-    private String getMessage(String path, String def) {
-        return ChatColor.translateAlternateColorCodes(
-            '&',
-            this.cfg.getString(path, def)
-        );
-    }
-
-    // --- Anti-proxy security (misconfigured Velocity/BungeeCord) ---
-    private boolean isIpSafe(InetAddress address) {
-        if (address == null) return false;
-
-        // Interdit formellement les adresses de loopback (127.0.0.1, localhost)
-        if (address.isLoopbackAddress() || address.isAnyLocalAddress()) {
-            return false;
-        }
-
-        // Block private network IPs (192.168.x.x, 10.x.x.x, 172.x.x.x) often used by Pterodactyl/Docker nodes
-        if (
-            address.isSiteLocalAddress() &&
-            !this.cfg.getBoolean("settings.allow_local_ips", false)
-        ) {
-            return false;
-        }
-
-        return true;
-    }
-
-    // ----------------------------------------------------------------
-
     private void saveLinkedConfigAsync() {
         Bukkit.getAsyncScheduler().runNow(this, task -> {
             try {
@@ -228,7 +194,7 @@ public class AuthMePlus extends JavaPlugin implements Listener {
             : null;
 
         // Safety failsafe: stop if this is a proxy IP
-        if (pAddress == null || !isIpSafe(pAddress)) {
+        if (pAddress == null || !Utils.isIpSafe(pAddress, this.cfg)) {
             return;
         }
 
@@ -250,7 +216,8 @@ public class AuthMePlus extends JavaPlugin implements Listener {
             if (!isAuthenticated(player)) {
                 forceLogin(player);
                 player.sendMessage(
-                    getMessage(
+                    Utils.getMessage(
+                        this.cfg,
                         "messages.auto_login_success",
                         "&aAutomatic login detected!"
                     )
@@ -270,26 +237,32 @@ public class AuthMePlus extends JavaPlugin implements Listener {
             );
             if (!alreadyPrompted) {
                 Bukkit.getAsyncScheduler().runNow(this, task -> {
-                    boolean isPremium = checkUsernameIsPremium(name);
+                    boolean isPremium = Utils.checkUsernameIsPremium(
+                        getLogger(),
+                        name
+                    );
                     if (isPremium) {
                         player.getScheduler().run(
                             this,
                             scheduledTask -> {
                                 if (player.isOnline()) {
                                     player.sendMessage(
-                                        getMessage(
+                                        Utils.getMessage(
+                                            this.cfg,
                                             "messages.prompt_ip",
                                             "&eWould you like to enable login bypass for this IP?"
                                         )
                                     );
                                     player.sendMessage(
-                                        getMessage(
+                                        Utils.getMessage(
+                                            this.cfg,
                                             "messages.prompt_accept_howto",
                                             "&eUse &b/premium accept&e to allow this IP."
                                         )
                                     );
                                     player.sendMessage(
-                                        getMessage(
+                                        Utils.getMessage(
+                                            this.cfg,
                                             "messages.prompt_revoke_howto",
                                             "&eUse &b/premium revoke&e to remove the authorization."
                                         )
@@ -318,7 +291,8 @@ public class AuthMePlus extends JavaPlugin implements Listener {
     ) {
         if (!(sender instanceof Player)) {
             sender.sendMessage(
-                getMessage(
+                Utils.getMessage(
+                    this.cfg,
                     "messages.not_player",
                     "This command is only for players."
                 )
@@ -330,7 +304,7 @@ public class AuthMePlus extends JavaPlugin implements Listener {
 
         if (!this.cfg.getBoolean("settings.enableplugin", true)) {
             p.sendMessage(
-                getMessage("messages.plugin_disabled", "&cPlugin disabled.")
+                Utils.getMessage(this.cfg, "messages.plugin_disabled", "&cPlugin disabled.")
             );
             return true;
         }
@@ -346,17 +320,17 @@ public class AuthMePlus extends JavaPlugin implements Listener {
 
         if (args.length == 0) {
             p.sendMessage(
-                getMessage("messages.help_header", "&6=== Premium Commands ===")
+                Utils.getMessage(this.cfg, "messages.help_header", "&6=== Premium Commands ===")
             );
             p.sendMessage(
-                getMessage("messages.help_accept", "&e/premium accept")
+                Utils.getMessage(this.cfg, "messages.help_accept", "&e/premium accept")
             );
             p.sendMessage(
-                getMessage("messages.help_revoke", "&e/premium revoke")
+                Utils.getMessage(this.cfg, "messages.help_revoke", "&e/premium revoke")
             );
-            p.sendMessage(getMessage("messages.help_list", "&e/premium list"));
+            p.sendMessage(Utils.getMessage(this.cfg, "messages.help_list", "&e/premium list"));
             p.sendMessage(
-                getMessage("messages.help_about", "&e/premium about")
+                Utils.getMessage(this.cfg, "messages.help_about", "&e/premium about")
             );
             return true;
         }
@@ -373,7 +347,7 @@ public class AuthMePlus extends JavaPlugin implements Listener {
                 return handleAbout(p);
             default:
                 p.sendMessage(
-                    getMessage("messages.unknown_command", "&eUnknown command.")
+                    Utils.getMessage(this.cfg, "messages.unknown_command", "&eUnknown command.")
                 );
                 return true;
         }
@@ -420,7 +394,8 @@ public class AuthMePlus extends JavaPlugin implements Listener {
     ) {
         if (!isAuthenticated(p)) {
             p.sendMessage(
-                getMessage(
+                Utils.getMessage(
+                    this.cfg,
                     "messages.not_authenticated",
                     "&cYou must be logged in to do this."
                 )
@@ -430,7 +405,8 @@ public class AuthMePlus extends JavaPlugin implements Listener {
 
         if (pAddress == null || currentIp == null) {
             p.sendMessage(
-                getMessage(
+                Utils.getMessage(
+                    this.cfg,
                     "messages.no_ip",
                     "&cUnable to retrieve your IP address."
                 )
@@ -439,7 +415,7 @@ public class AuthMePlus extends JavaPlugin implements Listener {
         }
 
         // Block storing Velocity's IP instead of the player's IP
-        if (!isIpSafe(pAddress)) {
+        if (!Utils.isIpSafe(pAddress, this.cfg)) {
             p.sendMessage(
                 ChatColor.translateAlternateColorCodes(
                     '&',
@@ -463,18 +439,22 @@ public class AuthMePlus extends JavaPlugin implements Listener {
         }
 
         p.sendMessage(
-            getMessage("messages.mojang_check", "&eChecking your account...")
+            Utils.getMessage(this.cfg, "messages.mojang_check", "&eChecking your account...")
         );
 
         Bukkit.getAsyncScheduler().runNow(this, task -> {
-            boolean isPremium = checkUsernameIsPremium(p.getName());
+            boolean isPremium = Utils.checkUsernameIsPremium(
+                getLogger(),
+                p.getName()
+            );
 
             p.getScheduler().run(
                 this,
                 scheduledTask -> {
                     if (!isPremium) {
                         p.sendMessage(
-                            getMessage(
+                            Utils.getMessage(
+                                this.cfg,
                                 "messages.not_premium",
                                 "&cThis account is not Premium."
                             )
@@ -502,7 +482,8 @@ public class AuthMePlus extends JavaPlugin implements Listener {
 
                         saveLinkedConfigAsync();
                         p.sendMessage(
-                            getMessage(
+                            Utils.getMessage(
+                                this.cfg,
                                 "messages.premium_link_success",
                                 "&aYour premium account is now linked!"
                             )
@@ -510,7 +491,8 @@ public class AuthMePlus extends JavaPlugin implements Listener {
                         getLogger().info("Linked " + p.getName() + " to IP");
                     } else {
                         p.sendMessage(
-                            getMessage(
+                            Utils.getMessage(
+                                this.cfg,
                                 "messages.already_linked",
                                 "&aThis IP is already allowed."
                             )
@@ -537,7 +519,7 @@ public class AuthMePlus extends JavaPlugin implements Listener {
         if (args.length == 1) {
             if (currentIp == null) {
                 p.sendMessage(
-                    getMessage("messages.no_ip", "&cUnable to retrieve the IP.")
+                    Utils.getMessage(this.cfg, "messages.no_ip", "&cUnable to retrieve the IP.")
                 );
                 return true;
             }
@@ -559,14 +541,16 @@ public class AuthMePlus extends JavaPlugin implements Listener {
                 );
                 saveLinkedConfigAsync();
                 p.sendMessage(
-                    getMessage(
+                    Utils.getMessage(
+                        this.cfg,
                         "messages.premium_revoke",
                         "&cBypass has been removed."
                     )
                 );
             } else {
                 p.sendMessage(
-                    getMessage(
+                    Utils.getMessage(
+                        this.cfg,
                         "messages.ip_not_in_list",
                         "&eThis IP address is not in the list."
                     )
@@ -581,7 +565,8 @@ public class AuthMePlus extends JavaPlugin implements Listener {
             this.linkedConfig.set(lower + ".prompted", false);
             saveLinkedConfigAsync();
             p.sendMessage(
-                getMessage(
+                Utils.getMessage(
+                    this.cfg,
                     "messages.premium_revoke_all",
                     "&cAll addresses have been removed."
                 )
@@ -607,14 +592,16 @@ public class AuthMePlus extends JavaPlugin implements Listener {
             );
             saveLinkedConfigAsync();
             p.sendMessage(
-                getMessage(
+                Utils.getMessage(
+                    this.cfg,
                     "messages.premium_revoke_specific",
                     "&cThe IP has been removed."
                 )
             );
         } else {
             p.sendMessage(
-                getMessage(
+                Utils.getMessage(
+                    this.cfg,
                     "messages.ip_not_in_list",
                     "&eThe IP address is not in the list."
                 )
@@ -626,13 +613,14 @@ public class AuthMePlus extends JavaPlugin implements Listener {
     private boolean handleList(Player p, String lower, String[] args) {
         if (args.length == 1) {
             p.sendMessage(
-                getMessage(
+                Utils.getMessage(
+                    this.cfg,
                     "messages.list_confirm",
                     "&eAre you sure you want to list your IPs?"
                 )
             );
             p.sendMessage(
-                getMessage("messages.list_howto", "&eUse /premium list sure")
+                Utils.getMessage(this.cfg, "messages.list_howto", "&eUse /premium list sure")
             );
             return true;
         }
@@ -643,14 +631,15 @@ public class AuthMePlus extends JavaPlugin implements Listener {
             );
             if (linkedIps == null || linkedIps.isEmpty()) {
                 p.sendMessage(
-                    getMessage("messages.list_empty", "&eNo allowed IPs.")
+                    Utils.getMessage(this.cfg, "messages.list_empty", "&eNo allowed IPs.")
                 );
             } else {
                 p.sendMessage(
-                    getMessage("messages.list_header", "&aLinked IPs:")
+                    Utils.getMessage(this.cfg, "messages.list_header", "&aLinked IPs:")
                 );
                 for (String linkedIp : linkedIps) {
-                    String format = getMessage(
+                    String format = Utils.getMessage(
+                        this.cfg,
                         "messages.list_format",
                         "&b - %ip%"
                     );
@@ -659,7 +648,7 @@ public class AuthMePlus extends JavaPlugin implements Listener {
             }
         } else {
             p.sendMessage(
-                getMessage("messages.unknown_command", "&eUnknown command.")
+                Utils.getMessage(this.cfg, "messages.unknown_command", "&eUnknown command.")
             );
         }
         return true;
@@ -680,43 +669,4 @@ public class AuthMePlus extends JavaPlugin implements Listener {
         return true;
     }
 
-    private boolean checkUsernameIsPremium(String username) {
-        HttpURLConnection con = null;
-        try {
-            String url =
-                "https://api.mojang.com/users/profiles/minecraft/" + username;
-            con = (HttpURLConnection) (new URL(url)).openConnection();
-            con.setConnectTimeout(3000);
-            con.setReadTimeout(3000);
-            con.setRequestMethod("GET");
-            con.setRequestProperty("User-Agent", "AuthMePlus/1.0");
-            int code = con.getResponseCode();
-            if (code == 200) {
-                try (
-                    BufferedReader in = new BufferedReader(
-                        new InputStreamReader(
-                            con.getInputStream(),
-                            StandardCharsets.UTF_8
-                        )
-                    )
-                ) {
-                    StringBuilder sb = new StringBuilder();
-                    String line;
-                    while ((line = in.readLine()) != null) sb.append(line);
-                    return sb.length() > 0;
-                }
-            }
-            return false;
-        } catch (Exception e) {
-            getLogger().warning(
-                "Error checking Mojang API for " +
-                    username +
-                    ": " +
-                    e.getMessage()
-            );
-            return false;
-        } finally {
-            if (con != null) con.disconnect();
-        }
-    }
 }
