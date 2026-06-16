@@ -79,6 +79,7 @@ modrinth {
     token.set(System.getenv("MODRINTH_TOKEN"))
     projectId.set("pp17mZ16")
     versionNumber.set(project.version.toString())
+    versionName.set("AuthMePlus ${project.version}")
     versionType.set("release")
     uploadFile.set(tasks.jar)
     gameVersions.addAll("26.1", "26.1.1", "26.1.2")

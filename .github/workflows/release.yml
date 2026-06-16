@@ -13,6 +13,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-java@v5
         with:
@@ -25,11 +27,24 @@ jobs:
       - name: Build
         run: ./gradlew build
 
+      - name: Generate Changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-version:refname --list 'v*' | sed -n '2p')
+          if [ -n "$PREV_TAG" ]; then
+            CHANGELOG=$(git log --format="- %s" "$PREV_TAG..HEAD" | head -c 5000)
+          else
+            CHANGELOG="Initial release"
+          fi
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "CHANGELOG<<$EOF" >> $GITHUB_ENV
+          echo "$CHANGELOG" >> $GITHUB_ENV
+          echo "$EOF" >> $GITHUB_ENV
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           name: AuthMePlus ${{ github.ref_name }}
-          body: See the commit messages for changes.
+          body: ${{ env.CHANGELOG }}
           files: build/libs/*.jar
           generate_release_notes: true
 
@@ -37,5 +52,4 @@ jobs:
         run: ./gradlew modrinth
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
-          VERSION: ${{ github.event.release.tag_name }}
-          CHANGELOG: ${{ github.event.release.body }}
+          CHANGELOG: ${{ env.CHANGELOG }}
