@@ -5,6 +5,7 @@ import one.ruri.authmeplus.Logger
 import one.ruri.authmeplus.protocol.Protocol
 import org.bukkit.Bukkit
 import org.bukkit.event.EventHandler
+import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent
 
@@ -12,7 +13,7 @@ class PreLogin(
     private val protocolLib: Protocol,
     private val log: Logger,
 ) : Listener {
-    @EventHandler
+    @EventHandler(priority = EventPriority.LOWEST)
     fun onAsyncPlayerPreLogin(event: AsyncPlayerPreLoginEvent) {
         val name = event.name
         val uuid = protocolLib.getVerifiedUUID(name) ?: return
